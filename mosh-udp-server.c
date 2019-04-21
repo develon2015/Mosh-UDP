@@ -1,5 +1,6 @@
 /*####################################
-# Mosh server
+# Mosh-UDP daemon
+# Version 3.0
 ######################################*/
 
 #include <stdio.h>
@@ -63,13 +64,12 @@ info() {
 
 int
 main(int argc, char *argv[]) {
-	if (argc == 2 && strcmp("-h", argv[1]) == 0) {
+	if (argc > 1 && strcmp("-h", argv[1]) == 0) {
 		info();
 		return 0;
 	}
 	Argv = argv;
-	if (argc != 1) {
-		if (strcmp("--LOGIN", argv[1]) == 0) {
+	if (argc > 1 && strcmp("--LOGIN", argv[1]) == 0) {
 			int fd0, fd1;
 			sscanf(argv[2], "%d", &fd0);
 			sscanf(argv[3], "%d", &fd1);
@@ -144,7 +144,7 @@ main(int argc, char *argv[]) {
 	if (!(argc > 1 && strcmp("-f", argv[1]) == 0))
 		init_daemon();
 	else
-		puts("您当前处于调式模式");
+		puts("您当前处于调试模式");
 
 	while (1) {
 		char buf[1024 + 8] = { 0 };

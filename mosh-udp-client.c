@@ -1,3 +1,7 @@
+/**
+ * 由于2.0版本出现问题, 现推出3.0版本, 不向后兼容
+ * 
+ */
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +27,7 @@ resolveIPv4(const char *domain, struct in_addr *sin_addr) {
 void
 info(const char *pname) {
 	printf("Usage:\n\t%s\t<IP> <Port> [session-port]\n", pname);
-	printf("mosh-udp-server:\tversion 2.0\n");
+	printf("mosh-udp-server:\tversion 3.0\n");
 	printf("编译时间:\t\t" __DATE__ " " __TIME__ "\n");
 }
 
@@ -34,7 +38,7 @@ L:
 		info(argv[0]);
 		return 0;
 	}
-	int session_port = 0;
+	int session_port = 0; /* 会话端口 */
 	if (argc == 4 && sscanf(argv[3], "%d", &session_port) != 1) {
 L_unknown_port:
 		printf("%s 表示您想使用哪个UDP端口? 请提供正确的数字, 0代表默认\n", argv[3]);
@@ -42,10 +46,9 @@ L_unknown_port:
 	}
 	if (session_port > 65535 || session_port < 0)
 		goto L_unknown_port;
-	int port = 0;
+	int port = 0; /* 服务端监听端口 */
 	if (sscanf(argv[2], "%d", &port) != 1)
 		goto L;
-	printf("Connecting %s:%d...\n", argv[1], port);
 	int sfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sfd < 0) {
 		perror("socket");
@@ -60,7 +63,8 @@ L_unknown_port:
 		close(sfd);
 		return 1;
 	}
-	addr.sin_port = htons(port);
+	printf("Connecting %s:%d...\n", inet_ntoa(addr.sin_addr), port);
+	addr.sin_port = htons(port); 
 
 	char buf[1024] = { 0 };
 	char pwd[1024] = { 0 };
@@ -76,7 +80,7 @@ L_unknown_port:
 	memset(buf, 0, 1024);
 	printf("等待响应...\n");
 	recvfrom(sfd, buf, 1024, 0, 0, 0);
-	//printf("%s\n", buf);
+	printf("服务器回应: %s\n", buf);
 
 	int buf_port;
 	char buf_key[1024] = { 0 };
@@ -87,8 +91,9 @@ L_unknown_port:
 		return 0;
 	}
 	sprintf(cmd, "MOSH_KEY=%s mosh-client %s %d", buf_key, inet_ntoa(addr.sin_addr), buf_port);
-	system(cmd);
+	printf("%s\n", cmd);
 	close(sfd);
+	system(cmd);
 	return 0;
 }
 
