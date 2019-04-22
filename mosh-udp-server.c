@@ -19,22 +19,20 @@ char **Argv = NULL;
 
 void 
 init_daemon() {
-	close(STDOUT_FILENO);
-	//close(STDIN_FILENO);
-	//close(STDERR_FILENO);
-	int out = open("/dev/null", O_WRONLY);
-	if (out < 0) {
-		perror("打开/dev/null失败");
-	}
-	if (dup2(STDOUT_FILENO, out) != out) {
+	int logfd = open("/tmp/moshd.log", O_CREAT | O_WRONLY, 0666);
+	if (logfd < 0)
+		perror("log");
+	ftruncate(logfd, 0); // 删除旧的日志
+	if (dup2(logfd, STDOUT_FILENO) != STDOUT_FILENO) {
 		perror("重定向失败");
 	}
-	close(out);
+	close(logfd);
+	printf("新的日志: \n");
 	// 子进程不再继承终端IO
 
 	int pid = fork();
 	if(pid < 0) {
-		perror("fock");
+		perror("fork");
 		exit(1);  //创建错误，退出
 	}
 	if(pid > 0) //父进程退出, 子进程成为孤儿继承, 被init进程收养
@@ -87,6 +85,7 @@ main(int argc, char *argv[]) {
 		return 0;
 	}
 	Argv = argv;
+GET_INFO:
 	if (strcmp("--LOGIN", argv[1]) == 0) {
 		int fd0, fd1;
 		sscanf(argv[2], "%d", &fd0);
@@ -97,11 +96,21 @@ main(int argc, char *argv[]) {
 		while (strlen(buf) < 16) // mosh-server返回空行数量因版本而异, 故修复bug
 			fgets(buf, 1024, stdin); //huh
 		printf("buf -> %s\n", buf);
+		char check[1024] = { 0 };
+		sscanf(buf, "%s", check);
+		if (strcmp("Failed", check) == 0) {
+			printf("[E] 启动失败, 可能是端口被占用\n");
+			close(fd1);
+			return 0;
+		}
+		if (strcmp("MOSH", check) != 0) {
+			printf("未获取到登录信息 -> %s\n", buf);
+			goto GET_INFO;
+		}
 		int port;
 		char key[1024];
 		if (sscanf(buf, "%*s %*s %d %s", &port, key) != 2) {
-			// 启动失败, 可能是端口被占用
-			printf("[E] 启动失败, 可能是端口被占用\n");
+			printf("[E] 启动失败, 未知的错误\n");
 			close(fd1);
 			return 0;
 		}
@@ -154,18 +163,25 @@ L_while:
 		char buf[1024 + 8] = { 0 };
 		struct sockaddr_in client = { 0 };
 		socklen_t len = sizeof client;
+
 		printf("等待客户端连接...\n");
 		recvfrom(sfd, buf, 1024, 0, (struct sockaddr *)&client, &len);
+
 		printf("[%s : %d]\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+		printf("客户端: %s\n", buf);
+
 		char buf_login_magic[1024] = { 0 },
 		     buf_passwd[1024] = { 0 },
 		     buf_check[1024] = { 0 };
+
 		int session_port = 0;
+
 		if (sscanf(buf, "%s %s %d %s", buf_login_magic, buf_passwd, &session_port, buf_check) != 4) {
 			const char *RS = "GET OUT!";
 			sendto(sfd, RS, strlen(RS) + 1, 0, (void *)&client, len);
 			goto L_while;
 		}
+
 		if (strcmp("LOGIN", buf_login_magic) != 0 || strcmp("0xArimuraKasumi", buf_check) != 0 || strcmp(passwd, buf_passwd) != 0) {
 			const char * RS = "拒绝登录, 可能是您的密码错误";
 			sendto(sfd, RS, strlen(RS) + 1, 0, (void *)&client, len);
@@ -193,13 +209,17 @@ L_while:
 		char mosh_key[1024] = { 0 };
 		char mosh_buf[1024] = { 0 };
 		if (startMosh(session_port, &mosh_port, mosh_key) != 0) {
-			const char *RS = "服务器无法启动mosh-server";
+			const char *RS = "服务器无法启动mosh-server, 换个端口试试?";
 			sendto(sfd, RS, strlen(RS) + 1, 0, (void *)&client, len);
 			return 0;
 		}
 		sprintf(mosh_buf, "GO! %d %s #", mosh_port, mosh_key);
 		// 返回"GO! 端口号 KEY #"
-		sendto(sfd, mosh_buf, strlen(mosh_buf)+1, 0, (void *)&client, len);
+		// 重复发包以提高成功率
+		for (int i = 0; i < 20; i++) {
+			sendto(sfd, mosh_buf, strlen(mosh_buf) + 1, 0, (void *)&client, len);
+			sleep(0.2);
+		}
 	}
 
 	return 0;

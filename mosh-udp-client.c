@@ -78,7 +78,7 @@ L_unknown_port:
 	sprintf(buf, "LOGIN %s %d 0xArimuraKasumi", pwd, session_port);
 	sendto(sfd, buf, strlen(buf), 0, (struct sockaddr *)&addr, (socklen_t)sizeof addr);
 	memset(buf, 0, 1024);
-	printf("等待响应...\n");
+	printf("等待响应, 超时请中断命令...\n");
 	recvfrom(sfd, buf, 1024, 0, 0, 0);
 	printf("服务器回应: %s\n", buf);
 
