@@ -17,17 +17,20 @@ char **Argv = NULL;
 
 void 
 init_daemon() {
+	close(STDOUT_FILENO);
+	close(STDIN_FILENO);
+	close(STDERR_FILENO);
+	// 子进程不再继承终端IO
+
 	int pid = fork();
 	if(pid < 0) {
 		perror("fock");
 		exit(1);  //创建错误，退出
 	}
-	if(pid > 0) //父进程退出
+	if(pid > 0) //父进程退出, 子进程成为孤儿继承, 被init进程收养
 		exit(0);
 
-	setsid(); //使子进程成为组长
-
-	close(STDOUT_FILENO);
+	setsid(); //使子进程成为组长, 它不是终端进程直接创建的, 因此得以脱离终端
 }
 
 int
@@ -58,18 +61,23 @@ startMosh(int session_port, int *port, char *key) {
 
 void
 info() {
-	printf("mosh-udp-server:\tversion 2.0\n");
-	printf("编译时间:\t\t" __DATE__ " " __TIME__ "\n");
+	printf("Usage:\n");
+	printf("moshd <port> <passwd> [-f]\n");
+	printf("\t运行moshd在UDP端口port上, -f使其运行在前台, 仅用于调试\n");
+	printf("moshd -h\n\t打印本帮助文档\n");
+	puts("");
+	printf("版本:\tversion 3.0\n");
+	printf("\t" __DATE__ " " __TIME__ "\n");
 }
 
 int
 main(int argc, char *argv[]) {
-	if (argc > 1 && strcmp("-h", argv[1]) == 0) {
+	if (argc < 2 || strcmp("-h", argv[1]) == 0) {
 		info();
 		return 0;
 	}
 	Argv = argv;
-	if (argc > 1 && strcmp("--LOGIN", argv[1]) == 0) {
+	if (strcmp("--LOGIN", argv[1]) == 0) {
 			int fd0, fd1;
 			sscanf(argv[2], "%d", &fd0);
 			sscanf(argv[3], "%d", &fd1);
@@ -93,42 +101,27 @@ main(int argc, char *argv[]) {
 			printf("[I] write %ld\n", write(fd1, output, strlen(output)) );
 			close(fd1);
 			return 0;
-		}
 	}
 	printf("欢迎使用Mosh登录器-server, 访问主页: https://github.com/develon2015/Mosh-UDP\n");
-	printf("请选择端口号: ");
-	setbuf(stdout, NULL);
-	int port = 6666;
-	if (scanf("%d", &port) != 1) {
+	int port = 6666; /* 监听端口 */
+	if (sscanf(argv[1], "%d", &port) != 1) {
 		printf("使用默认端口 %d\n", port);
 	}
 
-//******输入密码
-	struct termios save, current;
-	tcgetattr(0, &save);// 得到原来的终端属性
-	current = save;
-	current.c_lflag &= ~ECHO;// 关闭回显
-	tcsetattr(0, TCSANOW, &current);// 设置新的终端属性
-
-        // 为了适应开机启动, 可以选择性关闭这条代码
-	// setbuf(stdin, NULL);
-	// 在/etc/rc.local中添加以下代码, 以便开机自启, 有时你需要使用runuser选择非root用户来启动本程序
-        // echo "6666passwd" | moshd -safe
-        if (!(argc == 2 && strcmp("-safe", argv[1]) == 0))
-		setbuf(stdin, NULL);
-	printf("请输入密码: ");
-	setbuf(stdout, NULL);
-	char passwd[1024] = { 0 };
-	scanf("%s", passwd);
-
-	tcsetattr(0, TCSANOW, &save);// 恢复原来的终端属性
-	puts("");
-//******
+	if (argc != 3 && argc != 4) {
+		info();
+		return 1;
+	}
+	char passwd[1024] = { 0 }; /* 密码 */
+	if (sscanf(argv[2], "%s", passwd) != 1) {
+		puts("密码异常");
+		return 1;
+	}
 
 	int sfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sfd == 0) {
 		perror("UDP");
-		return 0;
+		return 1;
 	}
 	struct sockaddr_in addr = { 0 };
 	addr.sin_family = AF_INET;
@@ -141,7 +134,7 @@ main(int argc, char *argv[]) {
 
 	printf("启动成功!\n");
 	// -f 参数将 moshd 置于前台运行, 此参数仅用于调试
-	if (!(argc > 1 && strcmp("-f", argv[1]) == 0))
+	if (!(argc == 4 && strcmp("-f", argv[3]) == 0))
 		init_daemon();
 	else
 		puts("您当前处于调试模式");
