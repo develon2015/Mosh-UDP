@@ -27,8 +27,8 @@ resolveIPv4(const char *domain, struct in_addr *sin_addr) {
 void
 info(const char *pname) {
 	printf("Usage:\n\t%s\t<IP> <Port> [session-port]\n", pname);
-	printf("mosh-udp-server:\tversion 3.0\n");
-	printf("编译时间:\t\t" __DATE__ " " __TIME__ "\n");
+	printf("版本:\tversion 3.0\n");
+	printf("\t" __DATE__ " " __TIME__ "\n");
 }
 
 int
