@@ -26,7 +26,8 @@ resolveIPv4(const char *domain, struct in_addr *sin_addr) {
 
 void
 info(const char *pname) {
-	printf("Usage:\n\t%s\t<IP> <Port> [session-port]\n", pname);
+	printf("Usage:\n\t%s\t<IP> <Port> [session-port] [public-port]\n", pname);
+	printf("\tsession-port指定服务器监听端口，默认是60001以上自增的。public-port用于NAT指定公网映射的端口\n");
 	printf("版本:\tversion 3.0\n");
 	printf("\t" __DATE__ " " __TIME__ "\n");
 }
@@ -46,6 +47,14 @@ L_unknown_port:
 	}
 	if (session_port > 65535 || session_port < 0)
 		goto L_unknown_port;
+	int public_port = 0; /* 公网端口映射 */
+	if (argc == 5 && sscanf(argv[4], "%d", &public_port) != 1) {
+L_unknown_public_port:
+		printf("%s 表示您想连接到哪个UDP端口? 请提供正确的数字, 默认是服务器返回的随机端口\n", argv[4]);
+		return 1;
+	}
+	if (public_port > 65535 || public_port < 0)
+		goto L_unknown_public_port;
 	int port = 0; /* 服务端监听端口 */
 	if (sscanf(argv[2], "%d", &port) != 1)
 		goto L;
@@ -90,7 +99,11 @@ L_unknown_port:
 		close(sfd);
 		return 0;
 	}
-	sprintf(cmd, "MOSH_KEY=%s mosh-client %s %d", buf_key, inet_ntoa(addr.sin_addr), buf_port);
+	if (public_port == 0)
+		sprintf(cmd, "MOSH_KEY=%s mosh-client %s %d", buf_key, inet_ntoa(addr.sin_addr), buf_port);
+	else
+		sprintf(cmd, "MOSH_KEY=%s mosh-client %s %d", buf_key, inet_ntoa(addr.sin_addr), public_port);
+
 	printf("%s\n", cmd);
 	close(sfd);
 	system(cmd);
