@@ -40,7 +40,7 @@ L:
 		return 0;
 	}
 	int session_port = 0; /* 会话端口 */
-	if (argc == 4 && sscanf(argv[3], "%d", &session_port) != 1) {
+	if (argc >= 4 && sscanf(argv[3], "%d", &session_port) != 1) {
 L_unknown_port:
 		printf("%s 表示您想使用哪个UDP端口? 请提供正确的数字, 0代表默认\n", argv[3]);
 		return 1;
